@@ -220,18 +220,41 @@ export function ConciergeTab() {
                 </p>
               </div>
             )}
-            <div className="mt-4 space-y-4">
-              {restaurants.map((r) => (
-                <RestaurantCard
-                  key={r.id}
-                  r={r}
-                  onView={() => {
-                    setMenuRestaurant(r);
-                    setActiveCategory(MENU_CATEGORIES[0]);
-                  }}
-                />
-              ))}
-            </div>
+            {restaurants.length === 0 ? (
+              <div className="flex flex-col items-center text-center py-12">
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center"
+                  style={{ background: "#FFF0E6" }}
+                >
+                  <span className="text-[40px] leading-none">🔍</span>
+                </div>
+                <h3 className="mt-4 font-bold text-[16px] text-foreground">
+                  No restaurants found
+                </h3>
+                <p className="mt-1 text-[13px] text-muted-foreground max-w-[260px]">
+                  Try a different craving or remove some filters
+                </p>
+                <button
+                  onClick={handleNewSearch}
+                  className="mt-4 h-9 px-4 rounded-lg border border-primary text-primary text-[13px] font-semibold transition-transform duration-150 active:scale-95 hover:bg-primary/5"
+                >
+                  Clear & Try Again
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                {restaurants.map((r) => (
+                  <RestaurantCard
+                    key={r.id}
+                    r={r}
+                    onView={() => {
+                      setMenuRestaurant(r);
+                      setActiveCategory(MENU_CATEGORIES[0]);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
