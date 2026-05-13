@@ -1,8 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Send, Star, Clock, MapPin, UtensilsCrossed, Plus, ShoppingCart } from "lucide-react";
 import { RESTAURANTS, MENU_BY_CATEGORY, MENU_CATEGORIES, type Restaurant, type MenuItem } from "@/lib/swiggy-data";
 import { BottomSheet } from "./BottomSheet";
 import { ActionButton } from "./ActionButton";
+// @ts-expect-error - JS module
+import { concierge } from "@/services/api";
+// @ts-expect-error - JS module
+import { useApi } from "@/services/useApi";
 
 const QUICK_PROMPTS = [
   "🌶️ Something spicy",
@@ -18,8 +22,13 @@ const FILTERS = ["Veg Only 🟢", "Non-Veg", "Under ₹200", "Under ₹500", "Ra
 type CartItem = { item: MenuItem; qty: number };
 
 export function ConciergeTab() {
-  const [input, setInput] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(RESTAURANTS);
+  const [usedBackend, setUsedBackend] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const { loading, error, execute: searchRestaurants } = useApi(concierge.search);
+
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [menuRestaurant, setMenuRestaurant] = useState<Restaurant | null>(null);
   const [activeCategory, setActiveCategory] = useState(MENU_CATEGORIES[0]);
@@ -46,10 +55,37 @@ export function ConciergeTab() {
   const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
   const cartTotal = cartItems.reduce((s, i) => s + i.qty * i.item.price, 0);
 
-  const handleSubmit = () => {
-    if (!input.trim()) return;
-    setSubmitted(true);
+  const handleSearch = async (queryOverride?: string) => {
+    const searchQuery = (queryOverride ?? query).trim();
+    if (!searchQuery) return;
+    if (queryOverride !== undefined) setQuery(queryOverride);
+    setHasSearched(true);
+
+    const result = await searchRestaurants(searchQuery);
+
+    if (result?.restaurants) {
+      setRestaurants(result.restaurants);
+      setUsedBackend(true);
+    } else {
+      setRestaurants(RESTAURANTS);
+      setUsedBackend(false);
+    }
   };
+
+  const handleNewSearch = () => {
+    setQuery("");
+    setHasSearched(false);
+    setRestaurants(RESTAURANTS);
+    setUsedBackend(false);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (!error) return;
+    setShowError(true);
+    const t = window.setTimeout(() => setShowError(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [error]);
 
   const showCartBar = useMemo(() => cartCount > 0 && !cartOpen, [cartCount, cartOpen]);
 
@@ -60,17 +96,17 @@ export function ConciergeTab() {
         <div className="relative bg-card rounded-2xl shadow-[var(--shadow-card)] flex items-center pl-4 pr-2 h-14">
           <Sparkles size={20} className="text-primary shrink-0" />
           <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="What are you craving right now?"
             className="flex-1 bg-transparent border-0 outline-none px-3 text-[15px] text-foreground placeholder:text-muted-foreground"
           />
           <button
-            onClick={handleSubmit}
-            disabled={!input.trim()}
+            onClick={() => handleSearch()}
+            disabled={!query.trim()}
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-opacity ${
-              input.trim() ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground opacity-50"
+              query.trim() ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground opacity-50"
             }`}
             aria-label="Send"
           >
@@ -82,7 +118,7 @@ export function ConciergeTab() {
           {QUICK_PROMPTS.map((p) => (
             <button
               key={p}
-              onClick={() => setInput(p.replace(/^\S+\s/, ""))}
+              onClick={() => handleSearch(p)}
               className="shrink-0 h-9 px-4 rounded-full bg-card border border-border text-[13px] text-foreground hover:bg-secondary"
             >
               {p}
@@ -113,7 +149,7 @@ export function ConciergeTab() {
 
       {/* Response area */}
       <div className="px-4 mt-6">
-        {!submitted ? (
+        {!hasSearched ? (
           <div className="flex flex-col items-center text-center py-16">
             <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
               <div className="relative">
@@ -125,12 +161,52 @@ export function ConciergeTab() {
               Describe your craving above and I'll find the perfect meal for you
             </p>
           </div>
+        ) : loading ? (
+          <>
+            <p className="text-center text-[14px] text-muted-foreground animate-pulse">
+              🤔 Finding the perfect meal for you...
+            </p>
+            <div className="mt-4 space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          </>
         ) : (
           <>
-            <h2 className="font-bold text-[17px] text-foreground">Here's what I found for you 🍽️</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-[18px] text-foreground">
+                {usedBackend
+                  ? "Here's what I found for you 🍽️"
+                  : "Here's what we think you'll love 🍽️"}
+              </h2>
+              <button
+                onClick={handleNewSearch}
+                className="shrink-0 h-7 px-2.5 rounded-lg border border-primary text-primary text-[12px] font-semibold hover:bg-primary/5"
+              >
+                ✨ New Search
+              </button>
+            </div>
+            {showError && (
+              <div
+                className="mt-3 rounded-xl p-3 border"
+                style={{ background: "#FFF0F0", borderColor: "#FFD0D0" }}
+              >
+                <p className="text-[13px]" style={{ color: "#CC0000" }}>
+                  ⚠️ Couldn't reach the server — showing popular restaurants instead
+                </p>
+              </div>
+            )}
             <div className="mt-4 space-y-4">
-              {RESTAURANTS.map((r) => (
-                <RestaurantCard key={r.id} r={r} onView={() => { setMenuRestaurant(r); setActiveCategory(MENU_CATEGORIES[0]); }} />
+              {restaurants.map((r) => (
+                <RestaurantCard
+                  key={r.id}
+                  r={r}
+                  onView={() => {
+                    setMenuRestaurant(r);
+                    setActiveCategory(MENU_CATEGORIES[0]);
+                  }}
+                />
               ))}
             </div>
           </>
@@ -313,6 +389,23 @@ function RestaurantCard({ r, onView }: { r: Restaurant; onView: () => void }) {
           >
             Quick Order
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden animate-pulse">
+      <div className="h-40 bg-gray-200" />
+      <div className="p-4">
+        <div className="h-3 w-2/3 bg-gray-200 rounded" />
+        <div className="mt-3 h-3 w-1/2 bg-gray-200 rounded" />
+        <div className="mt-3 h-3 w-1/3 bg-gray-200 rounded" />
+        <div className="mt-4 flex gap-2">
+          <div className="flex-1 h-10 bg-gray-200 rounded-xl" />
+          <div className="flex-1 h-10 bg-gray-200 rounded-xl" />
         </div>
       </div>
     </div>
