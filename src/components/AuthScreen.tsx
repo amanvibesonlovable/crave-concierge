@@ -12,8 +12,7 @@ export function AuthScreen({ onConnect }: { onConnect: () => void }) {
     try {
       const { authUrl } = await auth.getLoginUrl();
       window.location.href = authUrl;
-    } catch (err: any) {
-      console.warn("Backend not available, using mock auth:", err?.message);
+    } catch {
       setTimeout(() => {
         onConnect();
         setLoading(false);
