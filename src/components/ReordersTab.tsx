@@ -146,19 +146,16 @@ export function ReordersTab() {
       });
       if (result?.success) {
         setReorderSuccess(true);
+        showToast("🎉 Order placed! Arriving in 28–35 mins", "success");
         setTimeout(() => {
           setReorderSuccess(false);
           setTarget(null);
         }, 1000);
+      } else {
+        throw new Error("Order failed");
       }
     } catch {
-      setTimeout(() => {
-        setReorderSuccess(true);
-        setTimeout(() => {
-          setReorderSuccess(false);
-          setTarget(null);
-        }, 1000);
-      }, 1500);
+      showToast("Couldn't place order — please try the Swiggy app", "error");
     } finally {
       setReorderLoading(false);
     }
