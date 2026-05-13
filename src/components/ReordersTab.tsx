@@ -335,7 +335,10 @@ export function ReordersTab() {
             ) : (
               <ActionButton
                 label={`Place Reorder — ₹${target.price}`}
-                onComplete={() => setTarget(null)}
+                onComplete={() => {
+                  showToast("🎉 Order placed! Arriving in 28–35 mins", "success");
+                  setTarget(null);
+                }}
               />
             )}
             <p className="text-center text-[11px] text-muted-foreground">Estimated delivery: 28–35 mins</p>
