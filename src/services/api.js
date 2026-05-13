@@ -47,10 +47,11 @@ export const auth = {
 };
 
 export const concierge = {
-  search: (query) =>
+  search: (query, opts = {}) =>
     request('/mcp/search', {
       method: 'POST',
       body: JSON.stringify({ query }),
+      signal: opts.signal,
     }),
   getMenu: (restaurantId) => request(`/mcp/menu/${restaurantId}`),
 };
