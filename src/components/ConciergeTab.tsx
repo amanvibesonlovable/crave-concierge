@@ -22,8 +22,13 @@ const FILTERS = ["Veg Only 🟢", "Non-Veg", "Under ₹200", "Under ₹500", "Ra
 type CartItem = { item: MenuItem; qty: number };
 
 export function ConciergeTab() {
-  const [input, setInput] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(RESTAURANTS);
+  const [usedBackend, setUsedBackend] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const { loading, error, execute: searchRestaurants } = useApi(concierge.search);
+
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [menuRestaurant, setMenuRestaurant] = useState<Restaurant | null>(null);
   const [activeCategory, setActiveCategory] = useState(MENU_CATEGORIES[0]);
@@ -50,10 +55,37 @@ export function ConciergeTab() {
   const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
   const cartTotal = cartItems.reduce((s, i) => s + i.qty * i.item.price, 0);
 
-  const handleSubmit = () => {
-    if (!input.trim()) return;
-    setSubmitted(true);
+  const handleSearch = async (queryOverride?: string) => {
+    const searchQuery = (queryOverride ?? query).trim();
+    if (!searchQuery) return;
+    if (queryOverride !== undefined) setQuery(queryOverride);
+    setHasSearched(true);
+
+    const result = await searchRestaurants(searchQuery);
+
+    if (result?.restaurants) {
+      setRestaurants(result.restaurants);
+      setUsedBackend(true);
+    } else {
+      setRestaurants(RESTAURANTS);
+      setUsedBackend(false);
+    }
   };
+
+  const handleNewSearch = () => {
+    setQuery("");
+    setHasSearched(false);
+    setRestaurants(RESTAURANTS);
+    setUsedBackend(false);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (!error) return;
+    setShowError(true);
+    const t = window.setTimeout(() => setShowError(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [error]);
 
   const showCartBar = useMemo(() => cartCount > 0 && !cartOpen, [cartCount, cartOpen]);
 
@@ -64,17 +96,17 @@ export function ConciergeTab() {
         <div className="relative bg-card rounded-2xl shadow-[var(--shadow-card)] flex items-center pl-4 pr-2 h-14">
           <Sparkles size={20} className="text-primary shrink-0" />
           <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="What are you craving right now?"
             className="flex-1 bg-transparent border-0 outline-none px-3 text-[15px] text-foreground placeholder:text-muted-foreground"
           />
           <button
-            onClick={handleSubmit}
-            disabled={!input.trim()}
+            onClick={() => handleSearch()}
+            disabled={!query.trim()}
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-opacity ${
-              input.trim() ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground opacity-50"
+              query.trim() ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground opacity-50"
             }`}
             aria-label="Send"
           >
@@ -86,7 +118,7 @@ export function ConciergeTab() {
           {QUICK_PROMPTS.map((p) => (
             <button
               key={p}
-              onClick={() => setInput(p.replace(/^\S+\s/, ""))}
+              onClick={() => handleSearch(p)}
               className="shrink-0 h-9 px-4 rounded-full bg-card border border-border text-[13px] text-foreground hover:bg-secondary"
             >
               {p}
