@@ -276,6 +276,13 @@ export function ReordersTab() {
         </div>
       </section>
 
+      <p
+        className="text-center text-[11px]"
+        style={{ color: "#C0C0C0", paddingBottom: 32 }}
+      >
+        SwiggyAI v1.0 · Powered by Claude AI · Not affiliated with Swiggy
+      </p>
+
       <BottomSheet
         open={!!target}
         onClose={() => setTarget(null)}
