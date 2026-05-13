@@ -149,7 +149,7 @@ export function ConciergeTab() {
 
       {/* Response area */}
       <div className="px-4 mt-6">
-        {!submitted ? (
+        {!hasSearched ? (
           <div className="flex flex-col items-center text-center py-16">
             <div className="w-24 h-24 rounded-full bg-accent flex items-center justify-center">
               <div className="relative">
@@ -161,12 +161,52 @@ export function ConciergeTab() {
               Describe your craving above and I'll find the perfect meal for you
             </p>
           </div>
+        ) : loading ? (
+          <>
+            <p className="text-center text-[14px] text-muted-foreground animate-pulse">
+              🤔 Finding the perfect meal for you...
+            </p>
+            <div className="mt-4 space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          </>
         ) : (
           <>
-            <h2 className="font-bold text-[17px] text-foreground">Here's what I found for you 🍽️</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-[18px] text-foreground">
+                {usedBackend
+                  ? "Here's what I found for you 🍽️"
+                  : "Here's what we think you'll love 🍽️"}
+              </h2>
+              <button
+                onClick={handleNewSearch}
+                className="shrink-0 h-7 px-2.5 rounded-lg border border-primary text-primary text-[12px] font-semibold hover:bg-primary/5"
+              >
+                ✨ New Search
+              </button>
+            </div>
+            {showError && (
+              <div
+                className="mt-3 rounded-xl p-3 border"
+                style={{ background: "#FFF0F0", borderColor: "#FFD0D0" }}
+              >
+                <p className="text-[13px]" style={{ color: "#CC0000" }}>
+                  ⚠️ Couldn't reach the server — showing popular restaurants instead
+                </p>
+              </div>
+            )}
             <div className="mt-4 space-y-4">
-              {RESTAURANTS.map((r) => (
-                <RestaurantCard key={r.id} r={r} onView={() => { setMenuRestaurant(r); setActiveCategory(MENU_CATEGORIES[0]); }} />
+              {restaurants.map((r) => (
+                <RestaurantCard
+                  key={r.id}
+                  r={r}
+                  onView={() => {
+                    setMenuRestaurant(r);
+                    setActiveCategory(MENU_CATEGORIES[0]);
+                  }}
+                />
               ))}
             </div>
           </>
