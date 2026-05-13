@@ -1,8 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Send, Star, Clock, MapPin, UtensilsCrossed, Plus, ShoppingCart } from "lucide-react";
 import { RESTAURANTS, MENU_BY_CATEGORY, MENU_CATEGORIES, type Restaurant, type MenuItem } from "@/lib/swiggy-data";
 import { BottomSheet } from "./BottomSheet";
 import { ActionButton } from "./ActionButton";
+// @ts-expect-error - JS module
+import { concierge } from "@/services/api";
+// @ts-expect-error - JS module
+import { useApi } from "@/services/useApi";
 
 const QUICK_PROMPTS = [
   "🌶️ Something spicy",
