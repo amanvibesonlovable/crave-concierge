@@ -5,8 +5,7 @@ import { BottomSheet } from "./BottomSheet";
 import { ActionButton } from "./ActionButton";
 // @ts-expect-error - JS module
 import { concierge } from "@/services/api";
-// @ts-expect-error - JS module
-import { useApi } from "@/services/useApi";
+import { showToast } from "./Toast";
 
 const QUICK_PROMPTS = [
   "🌶️ Something spicy",
