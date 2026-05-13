@@ -27,7 +27,8 @@ export function ConciergeTab() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>(RESTAURANTS);
   const [usedBackend, setUsedBackend] = useState(false);
   const [showError, setShowError] = useState(false);
-  const { loading, error, execute: searchRestaurants } = useApi(concierge.search);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [menuRestaurant, setMenuRestaurant] = useState<Restaurant | null>(null);
@@ -60,15 +61,38 @@ export function ConciergeTab() {
     if (!searchQuery) return;
     if (queryOverride !== undefined) setQuery(queryOverride);
     setHasSearched(true);
+    setLoading(true);
+    setError(null);
 
-    const result = await searchRestaurants(searchQuery);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
 
-    if (result?.restaurants) {
-      setRestaurants(result.restaurants);
-      setUsedBackend(true);
-    } else {
+    try {
+      const result: any = await concierge.search(searchQuery, { signal: controller.signal });
+      if (Array.isArray(result?.restaurants) && result.restaurants.length > 0) {
+        setRestaurants(result.restaurants);
+        setUsedBackend(true);
+      } else if (Array.isArray(result?.restaurants)) {
+        // Empty array — no results
+        setRestaurants([]);
+        setUsedBackend(true);
+      } else {
+        setRestaurants(RESTAURANTS);
+        setUsedBackend(false);
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        showToast("Search timed out — showing popular restaurants instead", "error");
+      } else if (err?.code === 429) {
+        showToast("Slow down! Too many searches — wait a moment 🙏", "info");
+      } else {
+        setError(err?.message ?? "Search failed");
+      }
       setRestaurants(RESTAURANTS);
       setUsedBackend(false);
+    } finally {
+      window.clearTimeout(timeout);
+      setLoading(false);
     }
   };
 
