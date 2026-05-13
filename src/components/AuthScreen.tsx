@@ -1,13 +1,24 @@
 import { useState } from "react";
+// @ts-expect-error - JS module
+import { auth } from "@/services/api";
 
 export function AuthScreen({ onConnect }: { onConnect: () => void }) {
   const [loading, setLoading] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
 
-  const handleConnect = () => {
+  const handleConnect = async () => {
     if (loading) return;
     setLoading(true);
-    window.setTimeout(() => onConnect(), 1500);
+    try {
+      const { authUrl } = await auth.getLoginUrl();
+      window.location.href = authUrl;
+    } catch (err: any) {
+      console.warn("Backend not available, using mock auth:", err?.message);
+      setTimeout(() => {
+        onConnect();
+        setLoading(false);
+      }, 1500);
+    }
   };
 
   return (
