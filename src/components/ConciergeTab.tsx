@@ -394,3 +394,20 @@ function RestaurantCard({ r, onView }: { r: Restaurant; onView: () => void }) {
     </div>
   );
 }
+
+function SkeletonCard() {
+  return (
+    <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden animate-pulse">
+      <div className="h-40 bg-gray-200" />
+      <div className="p-4">
+        <div className="h-3 w-2/3 bg-gray-200 rounded" />
+        <div className="mt-3 h-3 w-1/2 bg-gray-200 rounded" />
+        <div className="mt-3 h-3 w-1/3 bg-gray-200 rounded" />
+        <div className="mt-4 flex gap-2">
+          <div className="flex-1 h-10 bg-gray-200 rounded-xl" />
+          <div className="flex-1 h-10 bg-gray-200 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
