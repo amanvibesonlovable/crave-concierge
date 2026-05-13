@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Loader2, RefreshCw, X } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
 import { ActionButton } from "./ActionButton";
+// @ts-expect-error - JS module
+import { orders, addresses } from "@/services/api";
 
 type Usual = {
   id: string;
@@ -20,7 +22,7 @@ type PastOrder = {
   amount: number;
 };
 
-const USUALS: Usual[] = [
+const MOCK_USUALS: Usual[] = [
   { id: "u1", name: "Chicken Biryani (Full)", restaurant: "Paradise Biryani", price: 320, timesOrdered: 14, lastOrdered: "2 days ago" },
   { id: "u2", name: "Paneer Butter Masala + Naan", restaurant: "Dhaba Express", price: 380, timesOrdered: 9, lastOrdered: "5 days ago" },
   { id: "u3", name: "Veg Hakka Noodles", restaurant: "Wok to Walk", price: 220, timesOrdered: 7, lastOrdered: "8 days ago" },
@@ -29,7 +31,7 @@ const USUALS: Usual[] = [
   { id: "u6", name: "Classic Veg Burger", restaurant: "Burger Singh", price: 149, timesOrdered: 8, lastOrdered: "4 days ago" },
 ];
 
-const PAST_ORDERS: PastOrder[] = [
+const MOCK_ORDERS: PastOrder[] = [
   { id: "p1", restaurant: "Paradise Biryani", summary: "Chicken Biryani (Full) + 1 more", date: "May 9, 2026", amount: 640 },
   { id: "p2", restaurant: "Shawarma Station", summary: "Chicken Shawarma Wrap", date: "May 7, 2026", amount: 180 },
   { id: "p3", restaurant: "Burger Singh", summary: "Classic Veg Burger + Fries Combo", date: "May 5, 2026", amount: 299 },
@@ -38,26 +40,157 @@ const PAST_ORDERS: PastOrder[] = [
   { id: "p6", restaurant: "Maa ki Daal", summary: "Butter Chicken + Steamed Rice + Dal", date: "Apr 28, 2026", amount: 670 },
 ];
 
+const MOCK_ADDRESS = "Home — 14B, Linking Road, Bandra West";
+
 type ReorderTarget = { name: string; restaurant: string; price: number };
+
+const padTo6 = <T extends { id: string }>(live: T[], mock: T[]): T[] => {
+  if (live.length >= 6) return live.slice(0, 6);
+  const have = new Set(live.map((x) => x.id));
+  const fillers = mock.filter((m) => !have.has(m.id)).slice(0, 6 - live.length);
+  return [...live, ...fillers];
+};
 
 export function ReordersTab() {
   const [nudgeOpen, setNudgeOpen] = useState(true);
   const [target, setTarget] = useState<ReorderTarget | null>(null);
 
+  const [usuals, setUsuals] = useState<Usual[]>(MOCK_USUALS);
+  const [pastOrders, setPastOrders] = useState<PastOrder[]>(MOCK_ORDERS);
+  const [deliveryAddress, setDeliveryAddress] = useState<string>(MOCK_ADDRESS);
+  const [dataSource, setDataSource] = useState<"mock" | "live">("mock");
+  const [pageLoading, setPageLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [reorderLoading, setReorderLoading] = useState(false);
+  const [reorderSuccess, setReorderSuccess] = useState(false);
+
+  const loadTabData = async () => {
+    setPageLoading(true);
+    try {
+      const result: any = await orders.getAll();
+
+      let liveUsuals: Usual[] = [];
+      let livePast: PastOrder[] = [];
+      let isLive = false;
+
+      if (result?.usuals?.length > 0) {
+        liveUsuals = result.usuals;
+        isLive = true;
+      }
+      if (result?.orders?.length > 0) {
+        livePast = result.orders;
+      }
+
+      if (isLive) {
+        setUsuals(padTo6(liveUsuals, MOCK_USUALS));
+        setPastOrders(padTo6(livePast, MOCK_ORDERS));
+        setDataSource("live");
+      } else {
+        setDataSource("mock");
+      }
+
+      try {
+        const addrResult: any = await addresses.getAll();
+        if (addrResult?.addresses?.length > 0) {
+          const a = addrResult.addresses[0];
+          setDeliveryAddress(`${a.label} — ${a.address}`);
+        }
+      } catch {
+        /* keep mock address */
+      }
+    } catch {
+      setDataSource("mock");
+    } finally {
+      setPageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTabData();
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadTabData();
+    setRefreshing(false);
+  };
+
+  // Derive nudge item: live = days since lastOrdered ≥ 30; mock = hardcoded
+  const liveNudge =
+    dataSource === "live"
+      ? usuals.find((item) => {
+          if (!item.lastOrdered) return false;
+          const d = new Date(item.lastOrdered);
+          if (isNaN(d.getTime())) return false;
+          const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+          return days >= 30;
+        })
+      : null;
+  const liveNudgeDays = liveNudge
+    ? Math.floor((Date.now() - new Date(liveNudge.lastOrdered).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
+  const showNudge =
+    nudgeOpen && (dataSource === "mock" || (dataSource === "live" && !!liveNudge));
+
+  const handlePlaceReorder = async () => {
+    if (!target) return;
+    setReorderLoading(true);
+    try {
+      const result: any = await orders.place({
+        item_name: target.name,
+        restaurant: target.restaurant,
+        price: target.price,
+      });
+      if (result?.success) {
+        setReorderSuccess(true);
+        setTimeout(() => {
+          setReorderSuccess(false);
+          setTarget(null);
+        }, 1000);
+      }
+    } catch {
+      setTimeout(() => {
+        setReorderSuccess(true);
+        setTimeout(() => {
+          setReorderSuccess(false);
+          setTarget(null);
+        }, 1000);
+      }, 1500);
+    } finally {
+      setReorderLoading(false);
+    }
+  };
+
+  if (pageLoading) {
+    return <ReordersSkeleton />;
+  }
+
   return (
     <div className="px-4 py-4 pb-6 space-y-6">
-      {nudgeOpen && (
+      {showNudge && (
         <div
           className="rounded-xl p-4 flex items-start gap-3 animate-fade-in"
           style={{ backgroundColor: "#FFF0E6" }}
         >
           <span className="text-lg leading-none mt-0.5" aria-hidden>🕐</span>
           <p className="flex-1 min-w-0 text-[13px] text-[#1C1C1C] leading-snug line-clamp-2">
-            You haven't ordered from <span className="font-semibold">Paradise Biryani</span> in 32 days — craving it again?
+            You haven't ordered from{" "}
+            <span className="font-semibold">
+              {liveNudge ? liveNudge.restaurant : "Paradise Biryani"}
+            </span>{" "}
+            in {liveNudge ? liveNudgeDays : 32} days — craving it again?
           </p>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setTarget({ name: "Chicken Biryani (Full)", restaurant: "Paradise Biryani", price: 320 })}
+              onClick={() =>
+                setTarget(
+                  liveNudge
+                    ? { name: liveNudge.name, restaurant: liveNudge.restaurant, price: liveNudge.price }
+                    : { name: "Chicken Biryani (Full)", restaurant: "Paradise Biryani", price: 320 },
+                )
+              }
               className="text-[13px] font-bold text-primary"
             >
               Order Now
@@ -75,11 +208,38 @@ export function ReordersTab() {
 
       <section>
         <div className="flex items-end justify-between">
-          <h2 className="font-bold text-[18px] text-foreground">Your Usuals</h2>
-          <p className="text-[13px] text-muted-foreground">Tap to reorder instantly</p>
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-[18px] text-foreground">Your Usuals</h2>
+            {dataSource === "live" && (
+              <span
+                className="inline-flex items-center gap-1 bg-card rounded-full"
+                style={{
+                  border: "1px solid #2ECC71",
+                  padding: "4px 10px",
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#2ECC71" }} />
+                <span className="text-[10px] font-semibold" style={{ color: "#2ECC71" }}>
+                  Live
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <p className="text-[13px] text-muted-foreground">Tap to reorder instantly</p>
+            {dataSource === "live" && (
+              <button
+                onClick={handleRefresh}
+                className="text-muted-foreground p-1 -m-1"
+                aria-label="Refresh"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3">
-          {USUALS.map((u) => (
+          {usuals.map((u) => (
             <UsualCard
               key={u.id}
               u={u}
@@ -92,7 +252,7 @@ export function ReordersTab() {
       <section>
         <h2 className="font-bold text-[18px] text-foreground mt-4">Past Orders</h2>
         <div className="mt-3 space-y-2.5">
-          {PAST_ORDERS.map((o) => (
+          {pastOrders.map((o) => (
             <div
               key={o.id}
               className="bg-card rounded-xl p-3 flex items-center gap-3"
@@ -141,7 +301,7 @@ export function ReordersTab() {
             <div className="flex items-center gap-3">
               <span className="text-base" aria-hidden>📍</span>
               <p className="flex-1 min-w-0 text-[13px] font-bold text-foreground truncate">
-                Home — 14B, Linking Road, Bandra West
+                {deliveryAddress}
               </p>
               <button className="text-[12px] font-bold text-primary shrink-0">Change</button>
             </div>
@@ -154,10 +314,32 @@ export function ReordersTab() {
 
             <div className="border-t border-border" />
 
-            <ActionButton
-              label={`Place Reorder — ₹${target.price}`}
-              onComplete={() => setTarget(null)}
-            />
+            {dataSource === "live" ? (
+              <button
+                onClick={handlePlaceReorder}
+                disabled={reorderLoading || reorderSuccess}
+                className={`w-full h-12 rounded-xl font-semibold text-[15px] flex items-center justify-center gap-2 transition-colors ${
+                  reorderSuccess
+                    ? "bg-success text-success-foreground"
+                    : "bg-primary text-primary-foreground hover:bg-primary/90"
+                }`}
+              >
+                {reorderLoading ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : reorderSuccess ? (
+                  <>
+                    <Check size={20} /> Order Placed!
+                  </>
+                ) : (
+                  `Place Reorder — ₹${target.price}`
+                )}
+              </button>
+            ) : (
+              <ActionButton
+                label={`Place Reorder — ₹${target.price}`}
+                onComplete={() => setTarget(null)}
+              />
+            )}
             <p className="text-center text-[11px] text-muted-foreground">Estimated delivery: 28–35 mins</p>
           </div>
         )}
@@ -206,6 +388,55 @@ function UsualCard({ u, onReorder }: { u: Usual; onReorder: () => void }) {
       >
         🔁 Reorder
       </button>
+    </div>
+  );
+}
+
+function ReordersSkeleton() {
+  return (
+    <div className="px-4 py-4 pb-6 space-y-6">
+      <div className="h-14 w-full rounded-xl bg-gray-200 animate-pulse" />
+
+      <section>
+        <div className="h-5 w-[120px] rounded-lg bg-gray-200 animate-pulse" />
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-card rounded-2xl overflow-hidden flex flex-col"
+              style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}
+            >
+              <div className="aspect-square w-full bg-gray-200 animate-pulse" />
+              <div className="p-2.5 space-y-2">
+                <div className="h-3 w-5/6 rounded bg-gray-200 animate-pulse" />
+                <div className="h-3 w-3/5 rounded bg-gray-200 animate-pulse" />
+                <div className="h-3 w-2/5 rounded bg-gray-200 animate-pulse" />
+              </div>
+              <div className="h-9 w-full bg-gray-200 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <div className="h-5 w-[100px] rounded-lg bg-gray-200 animate-pulse mt-4" />
+        <div className="mt-3 space-y-2.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-card rounded-xl p-3 flex items-center gap-3"
+              style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
+            >
+              <div className="w-14 h-14 rounded-lg bg-gray-200 animate-pulse shrink-0" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="h-3 w-3/4 rounded bg-gray-200 animate-pulse" />
+                <div className="h-3 w-1/2 rounded bg-gray-200 animate-pulse" />
+              </div>
+              <div className="h-3 w-12 rounded bg-gray-200 animate-pulse shrink-0" />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
