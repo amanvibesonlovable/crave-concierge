@@ -1,10 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 // @ts-expect-error - JS module
 import { auth } from "@/services/api";
+import { ErrorBanner } from "./ErrorBanner";
 
-export function AuthScreen({ onConnect }: { onConnect: () => void }) {
+export function AuthScreen({
+  onConnect,
+  sessionExpired = false,
+  onClearSessionExpired,
+}: {
+  onConnect: () => void;
+  sessionExpired?: boolean;
+  onClearSessionExpired?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+  const [oauthError, setOauthError] = useState(false);
+  const [showSessionBanner, setShowSessionBanner] = useState(sessionExpired);
+
+  useEffect(() => {
+    setShowSessionBanner(sessionExpired);
+  }, [sessionExpired]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("error")) setOauthError(true);
+  }, []);
 
   const handleConnect = async () => {
     if (loading) return;
@@ -13,6 +35,7 @@ export function AuthScreen({ onConnect }: { onConnect: () => void }) {
       const { authUrl } = await auth.getLoginUrl();
       window.location.href = authUrl;
     } catch {
+      setDemoMode(true);
       setTimeout(() => {
         onConnect();
         setLoading(false);
@@ -23,7 +46,28 @@ export function AuthScreen({ onConnect }: { onConnect: () => void }) {
   return (
     <div className="min-h-screen w-full bg-background flex justify-center">
       <div className="w-full max-w-[430px] min-h-screen flex flex-col items-center justify-center px-6 py-10">
-        {/* Top */}
+        {(oauthError || showSessionBanner) && (
+          <div className="w-full max-w-[320px] mb-4">
+            {oauthError && (
+              <ErrorBanner
+                message="Swiggy login failed — please try again"
+                onDismiss={() => setOauthError(false)}
+              />
+            )}
+            {showSessionBanner && (
+              <div className={oauthError ? "mt-2" : ""}>
+                <ErrorBanner
+                  message="Your session expired — please reconnect"
+                  onDismiss={() => {
+                    setShowSessionBanner(false);
+                    onClearSessionExpired?.();
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-col items-center">
           <h1 className="font-extrabold text-[28px] text-primary tracking-tight">SwiggyAI</h1>
           <p className="text-[14px] text-muted-foreground mt-1">Your AI-powered food companion</p>
@@ -35,7 +79,6 @@ export function AuthScreen({ onConnect }: { onConnect: () => void }) {
           </div>
         </div>
 
-        {/* Middle */}
         <div className="mt-8 flex flex-col items-center w-full">
           <h2 className="font-bold text-[20px] text-foreground text-center">
             Connect your Swiggy account
@@ -59,12 +102,11 @@ export function AuthScreen({ onConnect }: { onConnect: () => void }) {
           </ul>
         </div>
 
-        {/* Bottom */}
         <div className="mt-10 w-full flex flex-col items-center">
           <button
             onClick={handleConnect}
             disabled={loading}
-            className="w-full max-w-[320px] rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center transition-opacity disabled:opacity-90"
+            className="w-full max-w-[320px] rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center transition-transform duration-150 active:scale-95 disabled:opacity-90"
             style={{ paddingTop: 18, paddingBottom: 18 }}
           >
             {loading ? (
@@ -82,6 +124,11 @@ export function AuthScreen({ onConnect }: { onConnect: () => void }) {
           <p className="text-[12px] text-muted-foreground mt-3 text-center">
             We never store your Swiggy password
           </p>
+          {demoMode && (
+            <p className="text-[11px] mt-2 text-muted-foreground text-center">
+              🟡 Running in demo mode
+            </p>
+          )}
           <button
             onClick={() => setShowInfo((s) => !s)}
             className="mt-4 text-[12px] text-primary underline"

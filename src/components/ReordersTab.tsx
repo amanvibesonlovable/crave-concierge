@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Loader2, RefreshCw, X } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
 import { ActionButton } from "./ActionButton";
+import { showToast } from "./Toast";
 // @ts-expect-error - JS module
 import { orders, addresses } from "@/services/api";
 
@@ -145,19 +146,16 @@ export function ReordersTab() {
       });
       if (result?.success) {
         setReorderSuccess(true);
+        showToast("🎉 Order placed! Arriving in 28–35 mins", "success");
         setTimeout(() => {
           setReorderSuccess(false);
           setTarget(null);
         }, 1000);
+      } else {
+        throw new Error("Order failed");
       }
     } catch {
-      setTimeout(() => {
-        setReorderSuccess(true);
-        setTimeout(() => {
-          setReorderSuccess(false);
-          setTarget(null);
-        }, 1000);
-      }, 1500);
+      showToast("Couldn't place order — please try the Swiggy app", "error");
     } finally {
       setReorderLoading(false);
     }
@@ -278,6 +276,13 @@ export function ReordersTab() {
         </div>
       </section>
 
+      <p
+        className="text-center text-[11px]"
+        style={{ color: "#C0C0C0", paddingBottom: 32 }}
+      >
+        SwiggyAI v1.0 · Powered by Claude AI · Not affiliated with Swiggy
+      </p>
+
       <BottomSheet
         open={!!target}
         onClose={() => setTarget(null)}
@@ -337,7 +342,10 @@ export function ReordersTab() {
             ) : (
               <ActionButton
                 label={`Place Reorder — ₹${target.price}`}
-                onComplete={() => setTarget(null)}
+                onComplete={() => {
+                  showToast("🎉 Order placed! Arriving in 28–35 mins", "success");
+                  setTarget(null);
+                }}
               />
             )}
             <p className="text-center text-[11px] text-muted-foreground">Estimated delivery: 28–35 mins</p>

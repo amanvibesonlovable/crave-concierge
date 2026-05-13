@@ -5,8 +5,7 @@ import { BottomSheet } from "./BottomSheet";
 import { ActionButton } from "./ActionButton";
 // @ts-expect-error - JS module
 import { concierge } from "@/services/api";
-// @ts-expect-error - JS module
-import { useApi } from "@/services/useApi";
+import { showToast } from "./Toast";
 
 const QUICK_PROMPTS = [
   "🌶️ Something spicy",
@@ -27,7 +26,8 @@ export function ConciergeTab() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>(RESTAURANTS);
   const [usedBackend, setUsedBackend] = useState(false);
   const [showError, setShowError] = useState(false);
-  const { loading, error, execute: searchRestaurants } = useApi(concierge.search);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [menuRestaurant, setMenuRestaurant] = useState<Restaurant | null>(null);
@@ -60,15 +60,38 @@ export function ConciergeTab() {
     if (!searchQuery) return;
     if (queryOverride !== undefined) setQuery(queryOverride);
     setHasSearched(true);
+    setLoading(true);
+    setError(null);
 
-    const result = await searchRestaurants(searchQuery);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
 
-    if (result?.restaurants) {
-      setRestaurants(result.restaurants);
-      setUsedBackend(true);
-    } else {
+    try {
+      const result: any = await concierge.search(searchQuery, { signal: controller.signal });
+      if (Array.isArray(result?.restaurants) && result.restaurants.length > 0) {
+        setRestaurants(result.restaurants);
+        setUsedBackend(true);
+      } else if (Array.isArray(result?.restaurants)) {
+        // Empty array — no results
+        setRestaurants([]);
+        setUsedBackend(true);
+      } else {
+        setRestaurants(RESTAURANTS);
+        setUsedBackend(false);
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        showToast("Search timed out — showing popular restaurants instead", "error");
+      } else if (err?.code === 429) {
+        showToast("Slow down! Too many searches — wait a moment 🙏", "info");
+      } else {
+        setError(err?.message ?? "Search failed");
+      }
       setRestaurants(RESTAURANTS);
       setUsedBackend(false);
+    } finally {
+      window.clearTimeout(timeout);
+      setLoading(false);
     }
   };
 
@@ -197,18 +220,41 @@ export function ConciergeTab() {
                 </p>
               </div>
             )}
-            <div className="mt-4 space-y-4">
-              {restaurants.map((r) => (
-                <RestaurantCard
-                  key={r.id}
-                  r={r}
-                  onView={() => {
-                    setMenuRestaurant(r);
-                    setActiveCategory(MENU_CATEGORIES[0]);
-                  }}
-                />
-              ))}
-            </div>
+            {restaurants.length === 0 ? (
+              <div className="flex flex-col items-center text-center py-12">
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center"
+                  style={{ background: "#FFF0E6" }}
+                >
+                  <span className="text-[40px] leading-none">🔍</span>
+                </div>
+                <h3 className="mt-4 font-bold text-[16px] text-foreground">
+                  No restaurants found
+                </h3>
+                <p className="mt-1 text-[13px] text-muted-foreground max-w-[260px]">
+                  Try a different craving or remove some filters
+                </p>
+                <button
+                  onClick={handleNewSearch}
+                  className="mt-4 h-9 px-4 rounded-lg border border-primary text-primary text-[13px] font-semibold transition-transform duration-150 active:scale-95 hover:bg-primary/5"
+                >
+                  Clear & Try Again
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                {restaurants.map((r) => (
+                  <RestaurantCard
+                    key={r.id}
+                    r={r}
+                    onView={() => {
+                      setMenuRestaurant(r);
+                      setActiveCategory(MENU_CATEGORIES[0]);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

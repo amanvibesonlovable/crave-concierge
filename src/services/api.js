@@ -3,14 +3,29 @@ const BASE_URL = 'http://localhost:3001';
 
 // ─── Core fetch wrapper ──────────────────────────────────────
 async function request(path, options = {}) {
+  const { signal, ...rest } = options;
   const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
+    ...rest,
+    signal,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...rest.headers,
     },
   });
+
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('swiggy_session_expired'));
+    }
+    throw new Error('Session expired');
+  }
+
+  if (res.status === 429) {
+    const e = new Error('Rate limited');
+    e.code = 429;
+    throw e;
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -32,10 +47,11 @@ export const auth = {
 };
 
 export const concierge = {
-  search: (query) =>
+  search: (query, opts = {}) =>
     request('/mcp/search', {
       method: 'POST',
       body: JSON.stringify({ query }),
+      signal: opts.signal,
     }),
   getMenu: (restaurantId) => request(`/mcp/menu/${restaurantId}`),
 };
